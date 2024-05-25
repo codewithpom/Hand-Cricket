@@ -1,39 +1,36 @@
-const http = require("http");
-const express = require("express");
-const socketio = require("socket.io");
-const path = require("path");
+// server.js
+const express = require('express');
+const http = require('http');
+const socketIo = require('socket.io');
 
 const app = express();
-const httpserver = http.Server(app);
-const io = socketio(httpserver);
+const server = http.createServer(app);
+const io = socketIo(server);
 
-const gamedirectory = path.join(__dirname, "html");
+let rooms = {};
+let usernames = {};
 
-app.use(express.static(gamedirectory));
+io.on('connection', (socket) => {
+  socket.on('join', (username, room) => {
+    usernames[socket.id] = username;
+    rooms[socket.id] = room;
 
-httpserver.listen(3000);
+    socket.leaveAll();
+    socket.join(room);
+    io.in(room).emit('message', 'Server: ' + username + ' has entered the game.');
+  });
 
-var rooms = [];
-var usernames = [];
+  socket.on('play', (number) => {
+    io.in(rooms[socket.id]).emit('play', usernames[socket.id] + ' played ' + number);
+  });
 
-io.on('connection', function(socket){
+  socket.on('disconnect', () => {
+    io.in(rooms[socket.id]).emit('message', 'Server: ' + usernames[socket.id] + ' has left the game.');
+    delete usernames[socket.id];
+    delete rooms[socket.id];
+  });
+});
 
-  socket.on("join", function(room, username){
-    if (username != ""){
-      rooms[socket.id] = room;
-      usernames[socket.id] = username;
-      socket.leaveAll();
-      socket.join(room);
-      io.in(room).emit("recieve", "Server : " + username + " has entered the chat.");
-      socket.emit("join", room);
-    }
-  })
-
-  socket.on("send", function(message){
-    io.in(rooms[socket.id]).emit("recieve", usernames[socket.id] +" : " + message);
-  })
-
-  socket.on("recieve", function(message){
-    socket.emit("recieve", message);
-  })
-})
+server.listen(3000, () => {
+  console.log('Server is running on port 3000');
+});
